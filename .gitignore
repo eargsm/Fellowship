@@ -1,0 +1,17 @@
+.cache/
+.idea/
+.vs/
+.vscode/
+.xmake/
+
+build/
+vs*/
+
+_snapshots/
+extern/SKSEMenuFramework/_example/
+
+*.zip
+*.7z
+*.pdb
+compile_commands.json
+*.log
