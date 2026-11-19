@@ -22,10 +22,11 @@ namespace
 	void LogSettings(const char* a_prefix)
 	{
 		logs::info("{}: enabled={} maxFollowers={} maxAnimals={} noFriendlyFire={} goldSharing={} followerCut={}% followerHomes={} "
-			"sandboxWhenStill={} sandboxDelay={}s sandboxInInns={} verbose={}",
+			"sandboxWhenStill={} sandboxDelay={}s sandboxInInns={} sandboxWhileWaiting={} waitDays={} verbose={}",
 			a_prefix, Settings::enabled.load(), Settings::maxFollowers.load(), Settings::maxAnimals.load(), Settings::noFriendlyFire.load(),
 			Settings::goldSharing.load(), Settings::followerCut.load(), Settings::followerHomes.load(), Settings::sandboxWhenStill.load(),
-			Settings::sandboxDelay.load(), Settings::sandboxInInns.load(), Settings::verboseLog.load());
+			Settings::sandboxDelay.load(), Settings::sandboxInInns.load(), Settings::sandboxWhileWaiting.load(), Settings::waitDays.load(),
+			Settings::verboseLog.load());
 	}
 }
 
@@ -75,6 +76,10 @@ void Settings::Load()
 				sandboxDelay = std::clamp(std::stoi(value), 1, kMaxSandboxDelay);
 			} else if (key == "bSandboxInInns") {
 				sandboxInInns = ParseBool(value);
+			} else if (key == "bSandboxWhileWaiting") {
+				sandboxWhileWaiting = ParseBool(value);
+			} else if (key == "iWaitDays") {
+				waitDays = std::clamp(std::stoi(value), 0, kMaxWaitDays);
 			} else if (key == "bVerboseLog") {
 				verboseLog = ParseBool(value);
 			}
@@ -138,6 +143,14 @@ void Settings::Save()
 			   "; true = they also relax the whole time you are inside an inn or a player home. Default false\n"
 			<< "bSandboxInInns = " << Bool(sandboxInInns) << "\n"
 			<< "\n"
+			   "; true = followers and animals you recruited the vanilla way and told to wait relax around that\n"
+			   ";        spot (about 7 m) instead of standing still. Default false\n"
+			<< "bSandboxWhileWaiting = " << Bool(sandboxWhileWaiting) << "\n"
+			<< "\n"
+			   "; Days a follower or animal you told to wait stays there after you leave before going home\n"
+			   "; (0-" << kMaxWaitDays << "). 0 = they wait until you come back. Default 3, as in vanilla\n"
+			<< "iWaitDays = " << waitDays.load() << "\n"
+			<< "\n"
 			   "; Extra detail in Documents/My Games/Skyrim Special Edition/SKSE/Fellowship.log\n"
 			<< "bVerboseLog = " << Bool(verboseLog) << "\n";
 		if (!out) {
@@ -160,6 +173,8 @@ void Settings::ResetToDefaults()
 	sandboxWhenStill = false;
 	sandboxDelay = kDefaultSandboxDelay;
 	sandboxInInns = false;
+	sandboxWhileWaiting = false;
+	waitDays = kDefaultWaitDays;
 	verboseLog = false;
 	Save();
 }

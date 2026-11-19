@@ -21,6 +21,25 @@ Function DismissPartyAnimal(Quest akDialogueFollower) global
 	endif
 EndFunction
 
+Function SetWaitSpot(Quest akPartyQuest, Actor akMember, int aiMarkerAlias, Faction akWaitSpot, Form akMarkerBase) global
+	ReferenceAlias markerAlias = akPartyQuest.GetAlias(aiMarkerAlias) as ReferenceAlias
+	ObjectReference marker = markerAlias.GetReference()
+	if marker
+		marker.MoveTo(akMember)
+	else
+		markerAlias.ForceRefTo(akMember.PlaceAtMe(akMarkerBase))
+	endif
+	akMember.AddToFaction(akWaitSpot)
+	akMember.EvaluatePackage()
+EndFunction
+
+Function HoldVanillaWaitTimer(Quest akDialogueFollower, int aiAliasID) global
+	Alias vanillaAlias = akDialogueFollower.GetAlias(aiAliasID)
+	if vanillaAlias
+		vanillaAlias.UnregisterForUpdateGameTime()
+	endif
+EndFunction
+
 Function SetFollowerHome(Quest akHomeQuest, Actor akFollower, int aiHome, int aiHomes, Faction akHasHome, Form akMarkerBase) global
 	ReferenceAlias markerAlias = akHomeQuest.GetAlias(aiHome + aiHomes) as ReferenceAlias
 	ObjectReference marker = markerAlias.GetReference()

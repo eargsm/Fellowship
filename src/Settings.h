@@ -6,6 +6,7 @@ namespace Settings
 	inline constexpr int kDefaultMaxMembers = 5;
 	inline constexpr int kDefaultFollowerCut = 5;
 	inline constexpr int kDefaultSandboxDelay = 30;
+	inline constexpr int kDefaultWaitDays = 3;
 
 	inline std::atomic<bool> enabled{ true };
 	inline std::atomic<int>  maxFollowers{ kDefaultMaxMembers };
@@ -20,6 +21,9 @@ namespace Settings
 	inline std::atomic<int>  sandboxDelay{ kDefaultSandboxDelay };
 	inline constexpr int     kMaxSandboxDelay = 120;
 	inline std::atomic<bool> sandboxInInns{ false };
+	inline std::atomic<bool> sandboxWhileWaiting{ false };
+	inline std::atomic<int>  waitDays{ kDefaultWaitDays };
+	inline constexpr int     kMaxWaitDays = 30;
 	inline std::atomic<bool> verboseLog{ false };
 
 	void Load();

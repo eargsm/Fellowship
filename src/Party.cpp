@@ -5,6 +5,7 @@
 #include "Homes.h"
 #include "Sandbox.h"
 #include "Settings.h"
+#include "WaitSpot.h"
 
 namespace
 {
@@ -17,7 +18,7 @@ namespace
 	constexpr RE::FormID kPartyQuestLocal = 0x800;
 	constexpr RE::FormID kSlotFactionLocal = 0x862;
 
-	constexpr float kWaitDays = 3.0f;
+	constexpr auto kVanillaHoldInterval = std::chrono::seconds{ 30 };
 
 	struct Group
 	{
@@ -49,6 +50,7 @@ namespace
 	std::unordered_set<int>               g_pendingClear;
 	std::unordered_set<RE::FormID>        g_dismissing;
 	std::unordered_map<RE::FormID, float> g_waitStart;
+	std::array<std::chrono::steady_clock::time_point, 2> g_vanillaHeld{};
 
 	void SetLastEvent(std::string a_text)
 	{
@@ -149,11 +151,16 @@ namespace
 		}
 		const auto it = g_waitStart.find(id);
 		if (it != g_waitStart.end()) {
-			return DaysPassed() - it->second >= kWaitDays;
+			const int days = Settings::waitDays;
+			return days > 0 && DaysPassed() - it->second >= static_cast<float>(days);
 		}
 		if (!a_actor->Is3DLoaded()) {
 			g_waitStart.emplace(id, DaysPassed());
-			logs::info("{} is waiting and you left: they go home in {:.0f} days unless you come back for them", Name(a_actor), kWaitDays);
+			if (const int days = Settings::waitDays; days > 0) {
+				logs::info("{} is waiting and you left: they go home in {} day(s) unless you come back for them", Name(a_actor), days);
+			} else {
+				logs::info("{} is waiting and you left: they wait until you come back for them", Name(a_actor));
+			}
 		}
 		return false;
 	}
@@ -161,7 +168,31 @@ namespace
 	float WaitDaysLeft(RE::Actor* a_actor)
 	{
 		const auto it = g_waitStart.find(a_actor->GetFormID());
-		return it == g_waitStart.end() ? -1.0f : (std::max)(0.0f, kWaitDays - (DaysPassed() - it->second));
+		const int  days = Settings::waitDays;
+		return it == g_waitStart.end() || days <= 0 ? -1.0f : (std::max)(0.0f, static_cast<float>(days) - (DaysPassed() - it->second));
+	}
+
+	void HoldVanillaTimer(const Group& a_group, RE::Actor* a_vanilla)
+	{
+		auto& next = g_vanillaHeld[a_group.vanillaAlias];
+		if (!Settings::enabled || !a_vanilla || !IsWaiting(a_vanilla) || FindSlot(a_group, a_vanilla) < 0) {
+			next = {};
+			return;
+		}
+		const auto now = std::chrono::steady_clock::now();
+		if (next == std::chrono::steady_clock::time_point{}) {
+			next = now + std::chrono::seconds{ 3 };
+			return;
+		}
+		if (now < next) {
+			return;
+		}
+		next = now + kVanillaHoldInterval;
+		const auto args = RE::MakeFunctionArguments(static_cast<RE::TESQuest*>(g_vanillaQuest), static_cast<std::int32_t>(a_group.vanillaAlias));
+		Common::CallScript("HoldVanillaWaitTimer", args, []() {});
+		if (Settings::verboseLog) {
+			logs::info("Cancelled vanilla's wait timer for {}", Name(a_vanilla));
+		}
 	}
 
 	constexpr std::uint32_t kCosaveID = 'FLWS';
@@ -235,6 +266,7 @@ namespace
 		if (g_slotFaction) {
 			a_actor->RemoveFromFaction(g_slotFaction);
 		}
+		WaitSpot::Release(a_actor);
 		g_waitStart.erase(a_actor->GetFormID());
 		ClearSlot(a_slot, a_actor->IsDead() ? "dead" : "no longer a teammate");
 	}
@@ -258,9 +290,10 @@ namespace
 				DismissMember(a_group, actor, 0, 0, "turned on you");
 			} else if (TickWaitTimer(actor)) {
 				g_waitStart.erase(actor->GetFormID());
-				DismissMember(a_group, actor, 5, 1, "waited 3 days for you");
+				DismissMember(a_group, actor, 5, 1, std::format("waited {} day(s) for you", Settings::waitDays.load()));
 			} else {
 				KeepFactions(a_group, actor);
+				WaitSpot::Update(i, actor, IsWaiting(actor));
 			}
 		}
 	}
@@ -316,6 +349,7 @@ namespace
 	{
 		const auto vanilla = VanillaActor(a_group);
 		UpdateMembers(a_group, a_player, vanilla);
+		HoldVanillaTimer(a_group, vanilla);
 		SlotNewRecruit(a_group, vanilla);
 		auto status = ListMembers(a_group, vanilla);
 		UpdateRecruitGlobal(a_group, status.count);
@@ -498,6 +532,8 @@ void Party::OnDataLoaded()
 	}
 	logs::info("Party quest {:08X} ({} slots: {} followers + {} animals), DialogueFollower {:08X}", g_partyQuest->GetFormID(),
 		g_partyQuest->aliases.size(), Settings::kMaxSlots, Settings::kMaxSlots, g_vanillaQuest->GetFormID());
+
+	WaitSpot::OnDataLoaded(g_partyQuest);
 
 	static MenuHandler menuHandler;
 	RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(&menuHandler);
